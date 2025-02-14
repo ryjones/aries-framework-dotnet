@@ -67,8 +67,13 @@ public class CredentialRequestService : ICredentialRequestService
             Some: _ =>
             {
                 if (format == "mso_mdoc")
-                    sessionTranscript = authorizationRequest.UnwrapOrThrow(new Exception()).ToVpHandover()
+                {
+                    var mdocGeneratedNonce = Nonce.GenerateNonce();
+                    sessionTranscript = authorizationRequest
+                        .UnwrapOrThrow()
+                        .ToVpHandover(mdocGeneratedNonce)
                         .ToSessionTranscript();
+                }
                 return Task.CompletedTask;
             },
             None: async () =>

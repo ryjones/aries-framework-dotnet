@@ -6,7 +6,6 @@ using WalletFramework.MdocLib.Device;
 using WalletFramework.MdocLib.Security;
 using WalletFramework.MdocLib.Security.Abstractions;
 using static WalletFramework.Core.Encoding.Sha256Hash;
-using static WalletFramework.Oid4Vc.Oid4Vp.Models.Nonce;
 
 namespace WalletFramework.Oid4Vc.Oid4Vp.Models;
 
@@ -14,8 +13,7 @@ public record Oid4VpHandover(
     Sha256Hash ClientIdSha256Hash,
     Sha256Hash ResponseUriSha256Hash,
     // TODO: Nonce from AuthRequest has weak type
-    string Nonce,
-    Nonce MdocGeneratedNonce) : IHandover
+    string Nonce) : IHandover
 {
     public CBORObject ToCbor()
     {
@@ -36,25 +34,41 @@ public record Oid4VpHandover(
 
 public static class Oid4VpHandoverFun
 {
-    public static Oid4VpHandover ToVpHandover(this AuthorizationRequest request)
+    public static Oid4VpHandover ToVpHandover(this AuthorizationRequest request, Option<Nonce> mdocGeneratedNonce)
     {
-        var mdocGeneratedNonce = GenerateNonce();
-
         var clientIdToHash = CBORObject.NewArray();
         var clientId = CBORObject.FromObject(request.ClientId);
         clientIdToHash.Add(clientId);
-        clientIdToHash.Add(mdocGeneratedNonce.AsBase64Url.ToString());
+        mdocGeneratedNonce.Match(
+            nonce =>
+            {
+                clientIdToHash.Add(nonce.AsBase64Url.ToString());
+            },
+            () =>
+            {
+                clientIdToHash.Add(string.Empty);
+            });
+
         var clientIdToHashBytes = clientIdToHash.EncodeToBytes();
         
         var responseUriToHash = CBORObject.NewArray();
         var responseUri = CBORObject.FromObject(request.ResponseUri);
         responseUriToHash.Add(responseUri);
-        responseUriToHash.Add(mdocGeneratedNonce.AsBase64Url.ToString());
+        mdocGeneratedNonce.Match(
+            nonce =>
+            {
+                responseUriToHash.Add(nonce.AsBase64Url.ToString());
+            },
+            () =>
+            {
+                responseUriToHash.Add(string.Empty);
+            });
+        
         var responseUriToHashBytes = responseUriToHash.EncodeToBytes();
 
         var clientIdHash = ComputeHash(clientIdToHashBytes);
         var responseUriHash = ComputeHash(responseUriToHashBytes);
 
-        return new Oid4VpHandover(clientIdHash, responseUriHash, request.Nonce, mdocGeneratedNonce);
+        return new Oid4VpHandover(clientIdHash, responseUriHash, request.Nonce);
     }
 }
