@@ -20,15 +20,19 @@ using WalletFramework.MdocLib.Elements;
 using WalletFramework.MdocLib.Security;
 using WalletFramework.MdocLib.Security.Cose;
 using WalletFramework.MdocVc;
+using WalletFramework.Oid4Vc.Errors;
 using WalletFramework.Oid4Vc.Oid4Vci.Abstractions;
 using WalletFramework.Oid4Vc.Oid4Vci.AuthFlow.Abstractions;
 using WalletFramework.Oid4Vc.Oid4Vci.AuthFlow.Models;
 using WalletFramework.Oid4Vc.Oid4Vci.CredConfiguration.Models;
 using WalletFramework.Oid4Vc.Oid4Vci.Extensions;
+using WalletFramework.Oid4Vc.Oid4Vci.Implementations;
 using WalletFramework.Oid4Vc.Oid4Vp.AuthResponse.Encryption;
+using WalletFramework.Oid4Vc.Oid4Vp.Errors;
 using WalletFramework.Oid4Vc.Oid4Vp.Models;
 using WalletFramework.Oid4Vc.Oid4Vp.PresentationExchange.Models;
 using WalletFramework.Oid4Vc.Oid4Vp.PresentationExchange.Services;
+using WalletFramework.Oid4Vc.Oid4Vp.TransactionData;
 using WalletFramework.SdJwtVc.Models;
 using WalletFramework.SdJwtVc.Models.Records;
 using WalletFramework.SdJwtVc.Services.SdJwtVcHolderService;
@@ -45,6 +49,7 @@ public class Oid4VpClientService : IOid4VpClientService
     ///     Initializes a new instance of the <see cref="Oid4VpClientService" /> class.
     /// </summary>
     /// <param name="agentProvider">The agent provider</param>
+    /// <param name="authorizationRequestService">The authorization request service.</param>
     /// <param name="httpClientFactory">The http client factory to create http clients.</param>
     /// <param name="sdJwtVcHolderService">The service responsible for SD-JWT related operations.</param>
     /// <param name="pexService">The Presentation Exchange service.</param>
@@ -56,6 +61,7 @@ public class Oid4VpClientService : IOid4VpClientService
     /// <param name="mDocStorage">The service responsible for mDOc storage operations.</param> 
     public Oid4VpClientService(
         IAgentProvider agentProvider,
+        IAuthorizationRequestService authorizationRequestService,
         IHttpClientFactory httpClientFactory,
         ILogger<Oid4VpClientService> logger,
         IMdocAuthenticationService mdocAuthenticationService,
@@ -67,6 +73,7 @@ public class Oid4VpClientService : IOid4VpClientService
         ISdJwtVcHolderService sdJwtVcHolderService)
     {
         _agentProvider = agentProvider;
+        _authorizationRequestService = authorizationRequestService;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
         _mdocAuthenticationService = mdocAuthenticationService;
@@ -79,6 +86,7 @@ public class Oid4VpClientService : IOid4VpClientService
     }
 
     private readonly IAgentProvider _agentProvider;
+    private readonly IAuthorizationRequestService _authorizationRequestService;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<Oid4VpClientService> _logger;
     private readonly IMdocAuthenticationService _mdocAuthenticationService;
@@ -89,31 +97,29 @@ public class Oid4VpClientService : IOid4VpClientService
     private readonly IAuthFlowSessionStorage _authFlowSessionStorage;
     private readonly ISdJwtVcHolderService _sdJwtVcHolderService;
 
-    /// <inheritdoc />
-    public async Task<(AuthorizationRequest, IEnumerable<PresentationCandidates>)> ProcessAuthorizationRequestAsync(
-        Uri authorizationRequestUri)
+    public async Task<Validation<AuthorizationRequestCancellation, AuthorizationRequestCandidates>> ProcessAuthorizationRequestUri(
+        AuthorizationRequestUri requestUri)
     {
-        var haipAuthorizationRequestUri = AuthorizationRequestUri.FromUri(authorizationRequestUri);
+        var authorizationRequestValidation = await _authorizationRequestService.GetAuthorizationRequest(requestUri);
+        var result = authorizationRequestValidation.Map(async authRequest =>
+        {
+            var candidates = await _pexService.FindCredentialCandidates(
+                authRequest.PresentationDefinition.InputDescriptors,
+                authRequest.ClientMetadata?.Formats);
 
-        var authorizationRequest = await _oid4VpHaipClient.ProcessAuthorizationRequestAsync(
-            haipAuthorizationRequestUri
-        );
+            var candidatesList = candidates.ToList();
 
-        var credentialCandidates = await _pexService.FindCredentialCandidates(
-            authorizationRequest.PresentationDefinition.InputDescriptors, authorizationRequest.ClientMetadata?.Formats);
-        
-        return (authorizationRequest, credentialCandidates);
+            var candidatesOption = candidatesList.Count == 0
+                ? Option<List<PresentationCandidates>>.None
+                : candidatesList;
+
+            return new AuthorizationRequestCandidates(authRequest, candidatesOption);
+        });
+
+        return await result.Traverse(candidates => candidates);
     }
 
-    /// <inheritdoc />
-    public async Task<Option<PresentationCandidates>> FindCredentialCandidateForInputDescriptorAsync(InputDescriptor inputDescriptor)
-    {
-        var candidates = await _pexService.FindCredentialCandidates([inputDescriptor], Option<Formats>.None);
-        return candidates.Any() ? candidates.First() : Option<PresentationCandidates>.None;
-    }
-
-    /// <inheritdoc />
-    public async Task<Uri?> SendAuthorizationResponseAsync(
+    public async Task<Option<Uri>> AcceptAuthorizationRequest(
         AuthorizationRequest authorizationRequest,
         IEnumerable<SelectedCredential> selectedCredentials,
         CombinedWalletAttestation? clientAttestation = null)
@@ -144,10 +150,14 @@ public class Oid4VpClientService : IOid4VpClientService
             {
                 case SdJwtRecord sdJwt:
                     format = FormatFun.CreateSdJwtFormat();
+
+                    var transactionDataHashesOption = authorizationRequest.TransactionData.OnSome(
+                        list => list.Select(data => data.Hash().AsString));
                     
                     presentation = await _sdJwtVcHolderService.CreatePresentation(
                         sdJwt,
                         claims.ToArray(),
+                        transactionDataHashesOption,
                         authorizationRequest.ClientId,
                         authorizationRequest.Nonce);
 
@@ -159,7 +169,7 @@ public class Oid4VpClientService : IOid4VpClientService
                     var toDisclose = claims.Select(claim =>
                     {
                         // TODO: This is needed because in mdoc the requested attributes look like this: $['Namespace']['ElementId']. Refactor this more clean
-                        var keys = claim.Split(new[] { "['", "']" }, StringSplitOptions.RemoveEmptyEntries);
+                        var keys = claim.Split(["['", "']"], StringSplitOptions.RemoveEmptyEntries);
                         
                         var nameSpace = NameSpace.ValidNameSpace(keys[0]).UnwrapOrThrow();
                         var elementId = ElementIdentifier
@@ -229,10 +239,10 @@ public class Oid4VpClientService : IOid4VpClientService
         {
             switch (credential.Credential)
             {
-                case SdJwtRecord sdJwtRecord when sdJwtRecord.OneTimeUse:
+                case SdJwtRecord { OneTimeUse: true } sdJwtRecord:
                     await _sdJwtVcHolderService.DeleteAsync(context, sdJwtRecord.GetId());
                     break;
-                case MdocRecord mDocRecord when mDocRecord.OneTimeUse:
+                case MdocRecord { OneTimeUse: true } mDocRecord:
                     await _mDocStorage.Delete(mDocRecord);
                     break;
             }
@@ -312,7 +322,8 @@ public class Oid4VpClientService : IOid4VpClientService
 
         try
         {
-            return DeserializeObject<AuthorizationResponseCallback>(redirectUriJson);
+            Uri callback = DeserializeObject<AuthorizationResponseCallback>(redirectUriJson);
+            return callback;
         }
         catch (Exception e)
         {
@@ -323,13 +334,57 @@ public class Oid4VpClientService : IOid4VpClientService
             return null;
         }
     }
+
+    public async Task<Option<Uri>> AbortAuthorizationRequest(AuthorizationRequestCancellation cancellation)
+    {
+        var callbackTaskOption = cancellation.ResponseUri.OnSome(
+            async uri =>
+            {
+                var error = cancellation.Errors.First();
+                
+                var message = new HttpRequestMessage(HttpMethod.Post, uri)
+                {
+                    Content = error.ToResponse().ToFormUrlContent()
+                };
+        
+                var httpClient = _httpClientFactory.CreateClient();
+                httpClient.DefaultRequestHeaders.Clear();
+                
+                using var cancellationSource = new CancellationTokenSource(TimeSpan.FromSeconds(3)); 
+                var responseMessage = await httpClient.SendAsync(message, cancellationSource.Token);
+                if (!responseMessage.IsSuccessStatusCode)
+                {
+                    var str = await responseMessage.Content.ReadAsStringAsync();
+                    throw new InvalidOperationException($"Authorization Error Response failed with message {str}");
+                }
+        
+                var redirectUriJson = await responseMessage.Content.ReadAsStringAsync();
+                var callback = DeserializeObject<AuthorizationResponseCallback>(redirectUriJson);
+                return callback?.ToUri() ?? Option<Uri>.None;
+            });
+        
+        var callbackUriOption = await callbackTaskOption.Traverse(uri => uri);
+        return callbackUriOption.Flatten();
+    }
+
+    /// <inheritdoc />
+    public async Task<Option<PresentationCandidates>> FindCredentialCandidateForInputDescriptorAsync(InputDescriptor inputDescriptor)
+    {
+        var candidates = await _pexService.FindCredentialCandidates(
+            [inputDescriptor],
+            Option<Formats>.None);
+        
+        var list = candidates.ToList();
+        return list.Any() 
+            ? list.First() 
+            : Option<PresentationCandidates>.None;
+    }
     
     //TODO: Refactor this C'' method into current flows (too much duplicate code)
-    public async Task<Uri?> SendAuthorizationResponseAsync(
+    public async Task<Option<Uri>> AcceptOnDemandRequest(
         AuthorizationRequest authorizationRequest,
         IEnumerable<SelectedCredential> selectedCredentials,
-        IssuanceSession issuanceSession,
-        CombinedWalletAttestation? clientAttestation = null)
+        IssuanceSession issuanceSession)
     {
         var credentials = selectedCredentials.ToList();
         
@@ -369,6 +424,7 @@ public class Oid4VpClientService : IOid4VpClientService
                     presentation = await _sdJwtVcHolderService.CreatePresentation(
                         sdJwt,
                         claims.ToArray(),
+                        Option<IEnumerable<string>>.None,
                         authorizationRequest.ClientId,
                         authorizationRequest.Nonce);
 
@@ -584,7 +640,8 @@ public class Oid4VpClientService : IOid4VpClientService
 
         try
         {
-            return DeserializeObject<AuthorizationResponseCallback>(redirectUriJson);
+            Uri callbackUri = DeserializeObject<AuthorizationResponseCallback>(redirectUriJson);
+            return callbackUri;
         }
         catch (Exception e)
         {
@@ -594,13 +651,5 @@ public class Oid4VpClientService : IOid4VpClientService
             
             return null;
         }
-    }
-}
-    
-internal static class SdJwtRecordExtensions
-{
-    internal static SdJwtDoc ToSdJwtDoc(this SdJwtRecord record)
-    {
-        return new SdJwtDoc(record.EncodedIssuerSignedJwt + "~" + string.Join("~", record.Disclosures) + "~");
     }
 }

@@ -1,5 +1,7 @@
 using System.Globalization;
 using Newtonsoft.Json.Linq;
+using WalletFramework.Core.Base64Url;
+using WalletFramework.Core.Encoding.Errors;
 using WalletFramework.Core.Functional;
 using WalletFramework.Core.Json.Errors;
 
@@ -170,5 +172,31 @@ public static class JsonFun
             default:
                 return token;
         }
+    }
+
+    public static Validation<JObject> DecodeToJObject(this Base64UrlString base64UrlString)
+    {
+        string json;
+        try
+        {
+            var bytes = base64UrlString.AsByteArray;
+            json = System.Text.Encoding.UTF8.GetString(bytes);
+        }
+        catch (Exception e)
+        {
+            return new CouldNotParseToUtf8StringError(e);
+        }
+
+        JObject result;
+        try
+        {
+            result = JObject.Parse(json);
+        }
+        catch (Exception e)
+        {
+            return new InvalidJsonError(json, e);
+        }
+
+        return result;
     }
 }

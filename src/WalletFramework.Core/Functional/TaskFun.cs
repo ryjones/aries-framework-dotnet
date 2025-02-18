@@ -45,6 +45,22 @@ public static class TaskFun
         }
     }
     
+    public static async Task<T2> OnException<T1, T2>(
+        this Task<T1> task,
+        Func<T1, T2> onSuccess,
+        Func<Exception, T2> fallback)
+    {
+        try
+        {
+            var t1 = await task;
+            return onSuccess(t1);
+        }
+        catch (Exception e)
+        {
+            return fallback(e);
+        }
+    }
+    
     public static async Task<TaskCompletionResult> OnException(this Task task, Func<Exception, Task> fallback)
     {
         try

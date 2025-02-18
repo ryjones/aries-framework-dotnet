@@ -51,4 +51,9 @@ public static class SdJwtRecordExtensions
 
         return record;
     }
+    
+    internal static SdJwtDoc ToSdJwtDoc(this SdJwtRecord record)
+    {
+        return new SdJwtDoc(record.EncodedIssuerSignedJwt + "~" + string.Join("~", record.Disclosures) + "~");
+    }
 }

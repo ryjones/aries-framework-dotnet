@@ -12,17 +12,12 @@ internal class Oid4VpHaipClient : IOid4VpHaipClient
     /// <summary>
     ///     Initializes a new instance of the <see cref="Oid4VpHaipClient" /> class.
     /// </summary>
-    /// <param name="authorizationRequestService">The auth srvice used to handle incoming Authorization Request Uris</param>
     /// <param name="pexService">The service responsible for presentation exchange protocol operations.</param>
-    public Oid4VpHaipClient(
-        IAuthorizationRequestService authorizationRequestService,
-        IPexService pexService)
+    public Oid4VpHaipClient(IPexService pexService)
     {
-        _authorizationRequestService = authorizationRequestService;
         _pexService = pexService;
     }
 
-    private readonly IAuthorizationRequestService _authorizationRequestService;
     private readonly IPexService _pexService;
 
     /// <inheritdoc />
@@ -58,11 +53,4 @@ internal class Oid4VpHaipClient : IOid4VpHaipClient
             State = authorizationRequest.State
         };
     }
-
-    /// <inheritdoc />
-    public async Task<AuthorizationRequest> ProcessAuthorizationRequestAsync(
-        AuthorizationRequestUri authorizationRequestUri) =>
-        await authorizationRequestUri.Value.Match(
-            async authRequestByReference => await _authorizationRequestService.CreateAuthorizationRequest(authRequestByReference),
-            async authRequestByValue => await _authorizationRequestService.CreateAuthorizationRequest(authRequestByValue));
 }

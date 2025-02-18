@@ -16,4 +16,6 @@ public class SelectedCredential
     ///     Gets or Sets the Credential that is used to answer the input descriptor.
     /// </summary>
     public ICredential Credential { get; set; } = null!;
+    
+    
 }

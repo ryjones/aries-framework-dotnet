@@ -1,4 +1,5 @@
 using Hyperledger.Aries.Storage;
+using LanguageExt;
 using Moq;
 using SD_JWT.Models;
 using SD_JWT.Roles;
@@ -36,7 +37,7 @@ public class SdJwtVcHolderServiceTests
         var claimsToDisclose = new[] { "given_name", "address.street_address", "nationalities[0]" };
 
         // Act
-        var result = await _service.CreatePresentation(sdJwtRecord, claimsToDisclose);
+        var result = await _service.CreatePresentation(sdJwtRecord, claimsToDisclose, Option<IEnumerable<string>>.None);
 
         // Assert
         var doc = new SdJwtDoc(result);

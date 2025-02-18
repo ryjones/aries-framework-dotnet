@@ -4,7 +4,7 @@ using WalletFramework.Core.Functional;
 
 namespace WalletFramework.MdocLib;
 
-public readonly struct NameSpace
+public readonly record struct NameSpace
 {
     public string Value { get; }
 

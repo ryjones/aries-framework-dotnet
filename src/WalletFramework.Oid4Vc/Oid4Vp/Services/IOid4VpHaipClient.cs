@@ -1,4 +1,3 @@
-using WalletFramework.Oid4Vc.Oid4Vci.CredConfiguration.Models;
 using WalletFramework.Oid4Vc.Oid4Vp.Models;
 using Format = WalletFramework.Oid4Vc.Oid4Vci.CredConfiguration.Models.Format;
 
@@ -9,15 +8,6 @@ namespace WalletFramework.Oid4Vc.Oid4Vp.Services;
 /// </summary>
 public interface IOid4VpHaipClient
 {
-    /// <summary>
-    ///     Processes an OpenID4VP Authorization Request Url.
-    /// </summary>
-    /// <param name="authorizationRequestUri"></param>
-    /// <returns>
-    ///     A task representing the asynchronous operation. The task result contains the Authorization Response object associated with the OpenID4VP Authorization Request Url.
-    /// </returns>
-    Task<AuthorizationRequest> ProcessAuthorizationRequestAsync(AuthorizationRequestUri authorizationRequestUri);
-
     /// <summary>
     ///     Creates the Parameters that are necessary to send an OpenId4VP Authorization Response.
     /// </summary>

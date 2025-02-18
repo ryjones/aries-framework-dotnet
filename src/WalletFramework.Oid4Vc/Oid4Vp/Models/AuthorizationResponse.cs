@@ -31,11 +31,13 @@ public static class AuthorizationResponseFun
 {
     public static FormUrlEncodedContent ToFormUrl(this AuthorizationResponse authorizationResponse)
     {
-        var dict = new Dictionary<string, string>();
-        dict.Add("vp_token", authorizationResponse.VpToken);
-        dict.Add("presentation_submission", JsonConvert.SerializeObject(authorizationResponse.PresentationSubmission));
-        dict.Add("state", authorizationResponse.State ?? string.Empty);
-        
+        var dict = new Dictionary<string, string>
+        {
+            { "vp_token", authorizationResponse.VpToken },
+            { "presentation_submission", JsonConvert.SerializeObject(authorizationResponse.PresentationSubmission) },
+            { "state", authorizationResponse.State ?? string.Empty }
+        };
+
         return new FormUrlEncodedContent(dict);
     }
 }

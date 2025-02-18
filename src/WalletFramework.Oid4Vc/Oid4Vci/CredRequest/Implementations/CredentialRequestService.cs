@@ -114,7 +114,11 @@ public class CredentialRequestService : ICredentialRequestService
         return new ProofsOfPossession("jwt", jwts.ToArray());
     }
 
-    private async Task<string> GenerateKbProofOfPossession(KeyId keyId, IssuerMetadata issuerMetadata, string cNonce, Option<ClientOptions> clientOptions)
+    private async Task<string> GenerateKbProofOfPossession(
+        KeyId keyId,
+        IssuerMetadata issuerMetadata,
+        string cNonce,
+        Option<ClientOptions> clientOptions)
     {
         return await _sdJwtSigner.GenerateKbProofOfPossessionAsync(
             keyId,
@@ -122,7 +126,8 @@ public class CredentialRequestService : ICredentialRequestService
             cNonce,
             "openid4vci-proof+jwt",
             null,
-            clientOptions.ToNullable()?.ClientId);
+            clientOptions.ToNullable()?.ClientId,
+            Option<IEnumerable<string>>.None);
     }
 
     async Task<Validation<CredentialResponse>> ICredentialRequestService.RequestCredentials(

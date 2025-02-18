@@ -3,7 +3,7 @@ using WalletFramework.Core.Functional;
 
 namespace WalletFramework.Core.Credentials;
 
-public readonly struct CredentialSetId
+public readonly record struct CredentialSetId
 {
     private string Value { get; }
 
