@@ -225,7 +225,7 @@ public sealed class SdJwtRecord : RecordBase, ICredential
             ? DateTimeOffset.FromUnixTimeSeconds(sdJwtDoc.UnsecuredPayload.SelectToken("iat")!.Value<long>()).DateTime
             : null;
         NotBefore = sdJwtDoc.UnsecuredPayload.SelectToken("nbf")?.Value<long>() is not null
-            ? DateTimeOffset.FromUnixTimeSeconds(sdJwtDoc.UnsecuredPayload.SelectToken("exp")!.Value<long>()).DateTime
+            ? DateTimeOffset.FromUnixTimeSeconds(sdJwtDoc.UnsecuredPayload.SelectToken("nbf")!.Value<long>()).DateTime
             : null;
         IssuerId = sdJwtDoc.UnsecuredPayload.SelectToken("iss")?.Value<string>() 
                    ?? throw new ArgumentNullException(nameof(IssuerId), "iss claim is missing or null");
@@ -269,7 +269,7 @@ public sealed class SdJwtRecord : RecordBase, ICredential
             ? DateTimeOffset.FromUnixTimeSeconds(sdJwtDoc.UnsecuredPayload.SelectToken("iat")!.Value<long>()).DateTime
             : null;
         NotBefore = sdJwtDoc.UnsecuredPayload.SelectToken("nbf")?.Value<long>() is not null
-            ? DateTimeOffset.FromUnixTimeSeconds(sdJwtDoc.UnsecuredPayload.SelectToken("exp")!.Value<long>()).DateTime
+            ? DateTimeOffset.FromUnixTimeSeconds(sdJwtDoc.UnsecuredPayload.SelectToken("nbf")!.Value<long>()).DateTime
             : null;
         IssuerId = sdJwtDoc.UnsecuredPayload.SelectToken("iss")?.Value<string>() 
                    ?? throw new ArgumentNullException(nameof(IssuerId), "iss claim is missing or null");
